@@ -1,7 +1,7 @@
 package postgres
 
 import (
-	"battle-ship_server/internal/service/statistics"
+	"battle-ship_server/internal/service/game/statistics"
 	"battle-ship_server/internal/storage"
 	"context"
 	"errors"
@@ -31,34 +31,54 @@ func New(storagePath string) (*Storage, error) {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	createTablesStmt, err := db.Prepare(context.Background(), "",`
-	CREATE TABLE IF NOT EXISTS users(
-		id SERIAL PRIMARY KEY,
-		login TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL
-	);
-	
-	CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);
-	
-	CREATE TABLE IF NOT EXISTS players_statistics(
-		id SERIAL PRIMARY KEY,
-		user_id INTEGER REFERENCES users(id),
-		wins INTEGER NOT NULL DEFAULT 0,
-		losses INTEGER NOT NULL DEFAULT 0,
-		rating INTEGER NOT NULL DEFAULT 0
-	);
-	
-	CREATE INDEX IF NOT EXISTS idx_player_statistics_user_id ON players_statistics(user_id);
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", op, err)
-	}
+	createTablesStmt := []string{
+        `CREATE TABLE IF NOT EXISTS users(
+            id SERIAL PRIMARY KEY,
+            login TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL
+        );`,
+        `CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);`,
+        `CREATE TABLE IF NOT EXISTS players_statistics(
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id),
+            wins INTEGER NOT NULL DEFAULT 0,
+            losses INTEGER NOT NULL DEFAULT 0,
+            rating INTEGER NOT NULL DEFAULT 0
+        );`,
+        `CREATE INDEX IF NOT EXISTS idx_player_statistics_user_id ON players_statistics(user_id);`,
+    }
 
-	_, err = db.Exec(context.Background(), createTablesStmt.SQL)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", op, err)
+	
+	// batch := pgx.Batch{}
+	
+    // for i := range createTablesStmt {
+	// 	batch.Queue(createTablesStmt[i])
+    // }
+	
+	
+	// fmt.Println("Creating tables...")
+	
+	// results := db.SendBatch(context.Background(), &batch)
+	// defer results.Close()
+	
+	// for {
+	// 	_, err := results.Exec()
+	// 	if err == pgx.ErrNoRows {
+	// 		break
+	// 	}
+	// 	if err != nil {
+	// 		fmt.Printf("%s: %v\n", op, err)
+	// 		return nil, fmt.Errorf("%s: %w", op, err)
+	// 	}
+	// }
+	for i := range createTablesStmt {
+		_, err := db.Exec(context.Background(), createTablesStmt[i])
+		if err != nil {
+			fmt.Printf("Error executing statement %d: %v\n", i, err)
+			return nil, fmt.Errorf("%s: %w", op, err)
+		}
 	}
-
+	
 	// Prepare statements for future use
 	_, err = db.Prepare(context.Background(), saveUser, `
 		INSERT INTO users(login, password_hash) VALUES ($1, $2) RETURNING id;
@@ -92,11 +112,11 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) SaveUser(login string, password string) (int, error) {
+func (s *Storage) SaveUser(login string, passHash []byte) (int, error) {
 	const op = "storage.postgres.Login"
 	
 	var id int
-	err := s.db.QueryRow(context.Background(), saveUser, login, password).Scan(&id)
+	err := s.db.QueryRow(context.Background(), saveUser, login, passHash).Scan(&id)
 	if err != nil {
 		// Check if user already exists
 		var pgErr *pgconn.PgError
