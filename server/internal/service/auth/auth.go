@@ -13,8 +13,8 @@ var (
 )
 
 type UserStorage interface {
-	SaveUser(login string, password []byte) (int, error)
-	GetUserData(login string) (int, []byte, error)
+	SaveUser(login string, password []byte) error
+	GetUserData(login string) ([]byte, error)
 }
 
 type Service struct {
@@ -26,7 +26,7 @@ func New(Storage UserStorage, log *slog.Logger) *Service {
 	return &Service{Storage: Storage, log: log}
 }
 
-func (s *Service) Register(login string, password string) (int, error) {
+func (s *Service) Register(login string, password string) error {
 	const op = "Service.Register"
 
 	log := s.log.With(
@@ -37,21 +37,23 @@ func (s *Service) Register(login string, password string) (int, error) {
 	passHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Error(err.Error())
-		return -1, err
+		return err
 	}
 
-	id, err := s.Storage.SaveUser(login, passHash)
-	if err == storage.ErrUserExists {
+	err = s.Storage.SaveUser(login, passHash)
+	if errors.Is(err, storage.ErrUserExists) {
 		log.Info("user already exists")
-		return -1, err
+		return err
 	} else if err != nil {
 		log.Error(err.Error())
-		return -1, err
+		return err
 	}
-	return id, nil
+
+	log.Info("user registered")
+	return nil
 }
 
-func (s *Service) Login(login string, password string) (int, error) {
+func (s *Service) Login(login string, password string) error {
 	const op = "Service.Login"
 
 	log := s.log.With(
@@ -59,23 +61,29 @@ func (s *Service) Login(login string, password string) (int, error) {
 		slog.String("login", login),
 	)
 
-	id, passHash, err := s.Storage.GetUserData(login)
-	if err == storage.ErrUserNotFound {
+	passHash, err := s.Storage.GetUserData(login)
+	if errors.Is(err, storage.ErrUserNotFound) {
 		log.Info("user not found")
-		return -1, err
+		return err
 	} else if err != nil {
 		log.Error(err.Error())
-		return -1, err
+		return err
 	}
 
 	err = bcrypt.CompareHashAndPassword(passHash, []byte(password))
-	if err == bcrypt.ErrMismatchedHashAndPassword {
+	if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
 		log.Info("wrong password")
-		return -1, ErrWrongPass
+		return ErrWrongPass
 	} else if err != nil {
 		log.Error(err.Error())
-		return -1, err
+		return err
 	}
 
-	return id, nil
+	log.Info("user logged in")
+	return nil
+}
+
+func (s *Service) Logout(login string) error {
+	// nothing to do here
+	return nil
 }

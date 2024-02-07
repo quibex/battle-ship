@@ -1,7 +1,7 @@
 package postgres
 
 import (
-	"battle-ship_server/internal/service/game/statistics"
+	"battle-ship_server/internal/service/game"
 	"battle-ship_server/internal/storage"
 	"context"
 	"errors"
@@ -17,10 +17,10 @@ type Storage struct {
 
 // Prepared statements names
 var (
-	saveUser = "saveUser"
+	saveUser    = "saveUser"
 	getUserData = "getUserData"
-	updateStat = "updateStat"
-	getStat = "getStat"
+	updateStat  = "updateStat"
+	getStat     = "getStat"
 )
 
 func New(storagePath string) (*Storage, error) {
@@ -32,35 +32,33 @@ func New(storagePath string) (*Storage, error) {
 	}
 
 	createTablesStmt := []string{
-        `CREATE TABLE IF NOT EXISTS users(
+		`CREATE TABLE IF NOT EXISTS users(
             id SERIAL PRIMARY KEY,
             login TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL
         );`,
-        `CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);`,
-        `CREATE TABLE IF NOT EXISTS players_statistics(
+		`CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);`,
+		`CREATE TABLE IF NOT EXISTS players_statistics(
             id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id),
+            user_login TEXT REFERENCES users(login),
             wins INTEGER NOT NULL DEFAULT 0,
             losses INTEGER NOT NULL DEFAULT 0,
             rating INTEGER NOT NULL DEFAULT 0
         );`,
-        `CREATE INDEX IF NOT EXISTS idx_player_statistics_user_id ON players_statistics(user_id);`,
-    }
+		`CREATE INDEX IF NOT EXISTS idx_player_statistics_user_login ON players_statistics(user_login);`,
+	}
 
-	
 	// batch := pgx.Batch{}
-	
-    // for i := range createTablesStmt {
+
+	// for i := range createTablesStmt {
 	// 	batch.Queue(createTablesStmt[i])
-    // }
-	
-	
+	// }
+
 	// fmt.Println("Creating tables...")
-	
+
 	// results := db.SendBatch(context.Background(), &batch)
 	// defer results.Close()
-	
+
 	// for {
 	// 	_, err := results.Exec()
 	// 	if err == pgx.ErrNoRows {
@@ -78,32 +76,32 @@ func New(storagePath string) (*Storage, error) {
 			return nil, fmt.Errorf("%s: %w", op, err)
 		}
 	}
-	
+
 	// Prepare statements for future use
 	_, err = db.Prepare(context.Background(), saveUser, `
-		INSERT INTO users(login, password_hash) VALUES ($1, $2) RETURNING id;
+		INSERT INTO users(login, password_hash) VALUES ($1, $2);
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	_, err = db.Prepare(context.Background(), getUserData, `
-		SELECT id, password_hash FROM users WHERE login = $1
+		SELECT password_hash FROM users WHERE login = $1
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	_, err = db.Prepare(context.Background(), updateStat, `
-		INSERT INTO players_statistics(user_id, wins, losses, rating) VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id) DO UPDATE SET wins = $2, losses = $3, rating = $4;
+		INSERT INTO players_statistics(user_login, wins, losses, rating) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (user_login) DO UPDATE SET wins = $2, losses = $3, rating = $4;
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	_, err = db.Prepare(context.Background(), getStat, `
-		SELECT wins, losses, rating FROM players_statistics WHERE user_id = $1
+		SELECT wins, losses, rating FROM players_statistics WHERE user_login = $1
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -112,45 +110,44 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) SaveUser(login string, passHash []byte) (int, error) {
+func (s *Storage) SaveUser(login string, passHash []byte) error {
 	const op = "storage.postgres.Login"
-	
-	var id int
-	err := s.db.QueryRow(context.Background(), saveUser, login, passHash).Scan(&id)
+
+	_, err := s.db.Exec(context.Background(), saveUser, login, passHash)
 	if err != nil {
 		// Check if user already exists
 		var pgErr *pgconn.PgError
-    	if errors.As(err, &pgErr) {
+		if errors.As(err, &pgErr) {
 			if pgErr.ConstraintName == "users_login_key" {
-				return -1, storage.ErrUserExists
+
+				return storage.ErrUserExists
 			}
 		}
-		return -1, fmt.Errorf("%s: %w", op, err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	return id, nil
+	return nil
 }
 
-func (s *Storage) GetUserData(login string) (int, []byte, error) {
+func (s *Storage) GetUserData(login string) ([]byte, error) {
 	const op = "storage.postgres.GetUserData"
 
-	var id int
 	var passHash []byte
-	err := s.db.QueryRow(context.Background(), getUserData, login).Scan(&id, &passHash)
+	err := s.db.QueryRow(context.Background(), getUserData, login).Scan(&passHash)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return -1, nil, storage.ErrUserNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, storage.ErrUserNotFound
 		}
-		return -1, nil, fmt.Errorf("%s: %w", op, err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return id, passHash, nil
+	return passHash, nil
 }
 
-func (s *Storage) UpdateStat(id int, stat statistics.Statistics) error {
+func (s *Storage) UpdateStat(userLogin string, stat game.Statistics) error {
 	const op = "storage.postgres.UpdateStat"
 
-	_, err := s.db.Exec(context.Background(), updateStat, id, stat.Wins, stat.Losses, stat.Rating)
+	_, err := s.db.Exec(context.Background(), updateStat, userLogin, stat.Wins, stat.Losses, stat.Rating)
 	if err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
@@ -158,16 +155,16 @@ func (s *Storage) UpdateStat(id int, stat statistics.Statistics) error {
 	return nil
 }
 
-func (s *Storage) GetStat(id int) (statistics.Statistics, error) {
+func (s *Storage) GetStat(login string) (game.Statistics, error) {
 	const op = "storage.postgres.GetStat"
 
-	var stat statistics.Statistics
-	err := s.db.QueryRow(context.Background(), getStat, id).Scan(&stat.Wins, &stat.Losses, &stat.Rating)
+	var stat game.Statistics
+	err := s.db.QueryRow(context.Background(), getStat, login).Scan(&stat.Wins, &stat.Losses, &stat.Rating)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return statistics.Statistics{}, storage.ErrUserNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return game.Statistics{}, storage.ErrUserNotFound
 		}
-		return statistics.Statistics{}, fmt.Errorf("%s: %w", op, err)
+		return game.Statistics{}, fmt.Errorf("%s: %w", op, err)
 	}
 
 	return stat, nil
