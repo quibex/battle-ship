@@ -20,14 +20,14 @@ func main() {
 
 	log.Info("Starting server")
 
-	postgresUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName) 
+	postgresUrl := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", cfg.Postgres.User, cfg.Postgres.Password, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 	storage, err := postgres.New(postgresUrl)
 	if err != nil {
 		panic(err)
 	}
 
 	auth := auth.New(storage, log)
-	game := game.New(log) 
+	game := game.New(log)
 
 	rmqUrl := fmt.Sprintf("amqp://%s:%s@%s:%s/", cfg.RabbitMQ.User, cfg.RabbitMQ.Password, cfg.RabbitMQ.Host, cfg.RabbitMQ.Port)
 	rmq := rabbitmq.New(rmqUrl, log, auth, game)
@@ -40,12 +40,18 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
 
-	<-stop
+	<-stop // wait for SIGTERM or SIGINT signal
 
-	rmq.Close()
-	storage.Close()
+	err = rmq.Close()
+	if err != nil {
+		log.Error("Failed to close rabbitmq connection: %v", err)
+	}
+	err = storage.Close()
+	if err != nil {
+		log.Error("Failed to close postgres connection: %v", err)
+	}
 	log.Info("Gracefully stopped")
-	
+
 }
 
 func setupLogger(env string) *slog.Logger {

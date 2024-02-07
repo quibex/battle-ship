@@ -1,7 +1,6 @@
 package config
 
 import (
-
 	"github.com/go-playground/validator"
 	"github.com/ilyakaznacheev/cleanenv"
 )
@@ -37,9 +36,9 @@ func MustLoad(configPath string) *Config {
 		panic(err)
 	}
 
+	// passwords are best stored in an environment variable
 	// cfg.Postgres.Password = os.Getenv("POSTGRES_PASSWORD")
 	// cfg.RabbitMQ.Password = os.Getenv("RABBITMQ_PASSWORD")
-	// fmt.Println(cfg)
 
 	err = validator.New().Struct(cfg)
 	if err != nil {

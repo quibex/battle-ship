@@ -4,9 +4,9 @@ postgres:
   port: 5432
   user: 'postgres'
   dbname: 'postgres'
-  password: 'mysecretpassword'
+  password: 'mysecretpassword'  # passwords are best stored in an environment variable
 rabbitmq:
   host: 'localhost'
   port: 5672
   user: 'guest'
-  password: 'guest'
+  password: 'guest' # passwords are best stored in an environment variable
