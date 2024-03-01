@@ -2,7 +2,7 @@ package main
 
 import (
 	"battle-ship_server/internal/config"
-	"battle-ship_server/internal/rabbitmq"
+	"battle-ship_server/internal/port/rabbitmq"
 	"battle-ship_server/internal/service/auth"
 	"battle-ship_server/internal/service/game"
 	"battle-ship_server/internal/storage/postgres"
@@ -27,13 +27,12 @@ func main() {
 	}
 
 	auth := auth.New(storage, log)
-	game := game.New(log)
+	game := game.New(storage, log)
 
 	rmqUrl := fmt.Sprintf("amqp://%s:%s@%s:%s/", cfg.RabbitMQ.User, cfg.RabbitMQ.Password, cfg.RabbitMQ.Host, cfg.RabbitMQ.Port)
 	rmq := rabbitmq.New(rmqUrl, log, auth, game)
 
-	go rmq.Login()
-	go rmq.Register()
+	rmq.Run()
 
 	log.Info("Server started")
 

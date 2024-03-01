@@ -35,6 +35,17 @@ func New(urlRmq string, log *slog.Logger, auth authService, game gameService) *R
 	return &RabbitMQ{conn: conn, ch: ch, log: log, auth: auth, game: game}
 }
 
+func (r *RabbitMQ) Run() {
+	go r.Login()
+	go r.Register()
+	go r.CreateGame()
+	go r.DelGame()
+	go r.GetAvailableGames()
+	go r.JoinGame()
+	go r.GameResult()
+	go r.GetUserStat()
+}
+
 func (r *RabbitMQ) sendResp(d amqp.Delivery, response any) {
 	const op = "RabbitMQ.sendResp"
 

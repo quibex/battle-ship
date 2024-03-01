@@ -46,6 +46,20 @@ func New(storagePath string) (*Storage, error) {
             rating INTEGER NOT NULL DEFAULT 0
         );`,
 		`CREATE INDEX IF NOT EXISTS idx_player_statistics_user_login ON players_statistics(user_login);`,
+		`DROP TRIGGER IF EXISTS create_player_statistics_trigger ON users;
+
+		CREATE OR REPLACE FUNCTION create_player_statistics() RETURNS TRIGGER AS $$
+		BEGIN
+		  INSERT INTO players_statistics(user_login, wins, losses, rating) 
+		  VALUES (NEW.login, 0, 0, 0);
+		  RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		
+		CREATE TRIGGER create_player_statistics_trigger
+		AFTER INSERT ON users
+		FOR EACH ROW
+		EXECUTE FUNCTION create_player_statistics();`,
 	}
 
 	// batch := pgx.Batch{}

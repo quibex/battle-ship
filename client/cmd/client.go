@@ -1,20 +1,29 @@
 package main
 
 import (
+	"battlship/internal/adapters/rabbitmq"
 	"battlship/internal/config"
-	"battlship/internal/rabbitmq"
-	"battlship/internal/service/auth"
-	"battlship/internal/ui"
+	"battlship/internal/service/authSrvc"
+	gameSrvs "battlship/internal/service/game"
+	terminalUI "battlship/internal/ui/terminal"
+	authUI "battlship/internal/ui/terminal/auth"
+	gameUI "battlship/internal/ui/terminal/game"
 )
 
 func main() {
 	cfg := config.MustLoad("config/config.yaml")
 
-	rmq := rabbitmq.New(cfg.RmqURL)
+	//fmt.Println(cfg.TimeOut)
 
-	auth := auth.New(rmq)
+	rmq := rabbitmq.New(cfg.RmqURL, cfg.TimeOut)
 
-	ui := ui.New(auth)
+	auth := authSrvc.New(rmq)
+	game := gameSrvs.New(rmq)
+
+	authUI1 := authUI.New(auth)
+	gameUI1 := gameUI.New(game)
+
+	ui := terminalUI.New(authUI1, gameUI1)
 
 	ui.MustRun()
 }

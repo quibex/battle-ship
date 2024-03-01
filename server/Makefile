@@ -18,7 +18,7 @@ TIME_TO_START_CONTAINER=10
 # TODO create a docker-compose file to run the application
 
 build:
-	go build -o battleship. ./cmd/server.go
+	go build -o battleship ./cmd/server.go
 
 run: run_postgres run_rabbitmq build
 	CONFIG_PATH=config/local.yaml ./battleship
@@ -52,5 +52,5 @@ stop:
 clean: stop
 	docker rm $(POSTGRES_CONTAINER_NAME)
 	docker rm $(RABBITMQ_CONTAINER_NAME)
-	rm -rf $(VOLUME)
+	docker volume rm $(VOLUME)
 	rm -f battleship

@@ -1,1 +1,2 @@
 rmq_url: "amqp://guest:guest@localhost:5672/"
+timeout: 100s

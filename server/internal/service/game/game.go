@@ -1,6 +1,7 @@
 package game
 
 import (
+	"errors"
 	"log/slog"
 	"sync"
 
@@ -40,8 +41,12 @@ type game struct {
 	status gameStatus
 }
 
-func New(log *slog.Logger) *Service {
-	return &Service{log: log, games: make(map[string]game)}
+func New(storage StatStorage, log *slog.Logger) *Service {
+	return &Service{
+		log:     log,
+		games:   make(map[string]game),
+		Storage: storage,
+	}
 }
 
 func (s *Service) CreateGame(userName string, dUser *amqp.Delivery) error {
@@ -56,12 +61,13 @@ func (s *Service) CreateGame(userName string, dUser *amqp.Delivery) error {
 	return nil
 }
 
-func (s *Service) DelGame(userName string) error {
+func (s *Service) DelGame(userName string) (user2 string, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	user2 = s.games[userName].user2
 	delete(s.games, userName)
-	return nil
+	return user2, nil
 }
 
 func (s *Service) GetAvailableGames() ([]string, error) {
@@ -78,6 +84,10 @@ func (s *Service) GetAvailableGames() ([]string, error) {
 }
 
 func (s *Service) JoinGame(creatorUserName, joiningUserName string, dJoiningUser *amqp.Delivery) (dCreatorUserName *amqp.Delivery, err error) {
+	if creatorUserName == joiningUserName {
+		return dJoiningUser, errors.New("you can't play against yourself")
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -92,7 +102,7 @@ func (s *Service) JoinGame(creatorUserName, joiningUserName string, dJoiningUser
 	return ugame.dUser1, nil
 }
 
-func (s *Service) GameResult(winner string, loser string) error {
+func (s *Service) SaveGameResult(winner string, loser string) error {
 	const op = "Service.ProcessGameResult"
 
 	log := s.log.With(

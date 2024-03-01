@@ -9,6 +9,14 @@ type gameJoinRequest struct {
 	JoiningUserName string `json:"joining_user_name"`
 }
 
+type gameDelRequest struct {
+	UserName string `json:"user_name"`
+}
+
+type gameDelResponse struct {
+	Err string `json:"error,omitempty"`
+}
+
 type getAvailableGamesRequest struct{}
 
 type gameResultRequest struct {
@@ -33,7 +41,8 @@ type getAvailableGamesResponse struct {
 }
 
 type gameCreateResponse struct {
-	Err string `json:"error,omitempty"`
+	User2 string `json:"user2,omitempty"`
+	Err   string `json:"error,omitempty"`
 }
 
 type gameJoinResponse struct {
@@ -43,3 +52,12 @@ type gameJoinResponse struct {
 type gameResultResponse struct {
 	Err string `json:"error,omitempty"`
 }
+
+const ( //queue names
+	gameCreate        = "game.create"
+	gameJoin          = "game.join"
+	getAvailableGames = "game.get_available"
+	saveGameResult    = "game.save_result"
+	getUserStat       = "game.get_user_stat"
+	gameDel           = "game.del"
+)
